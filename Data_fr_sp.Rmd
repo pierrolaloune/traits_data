@@ -1,0 +1,683 @@
+---
+title: "Traits espèces ligneuses méditerranéennes"
+author: "Pierre Bouchet"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+#work directory
+setwd("C:/R/STAGE/")
+#packages
+library(dplyr)
+library(taxize)
+library(vegan)
+library(ade4)
+library(ggplot2)
+library(pheatmap)
+library(factoextra)
+library(FactoMineR)
+library(htmltools)
+library(rgbif)
+library(stringr)
+library(rnaturalearth)
+library(plot3D)
+library(rgl)
+library(ggrepel)
+library(sf)
+library(conflicted)
+library(ggtern)
+library(viridis)
+
+```
+<br>
+
+# Chargement des données et manipulation des données
+
+<br>
+
+```{r, fig.align='center'}
+
+##LECTURE DES DONNEES ET MODIFICATION JEU DE DONNEES
+#data_fr_sp <- read.csv("Data_fr_sp_traits.csv",header = TRUE, sep = ",", stringsAsFactors = FALSE)
+#data_fr_sp <- dplyr::select(data_fr_sp, -c(Heights5, Individu, BMA..g., Leaf..g., BS, SLA, IC, Age, SLA.10))
+#data_fr_sp <- data_fr_sp %>%
+#  rename(BS = meanBS,
+#         BD = BD..cm.)
+#GPS <- data.frame(lat = data_fr_sp$Lat, long = data_fr_sp$Long)
+
+#data_fr_sp$Species <- gsub("_", " ", data_fr_sp$Species)
+#data_fr_sp <- na.omit(data_fr_sp)
+#data_fr_sp=as.data.frame(data_fr_sp)
+#head(data_fr_sp)
+#Mettre à jour les bons noms d'espèces
+#unique_species <- unique(data_fr_sp$Species)
+#resolved_species <- gnr_resolve(sci = unique_species)
+#filtered_species <- resolved_species[resolved_species$data_source_title == "Arctos", ]
+#updated_names <- setNames(filtered_species$matched_name, filtered_species$submitted_name)
+#correspondance <- data.frame(
+#  species_original = filtered_species$user_supplied_name,
+#  species_update = filtered_species$matched_name)
+#correspondance <- correspondance[!duplicated(correspondance$species_original), ]
+#data_fr_sp <- merge(data_fr_sp, correspondance, by.x = "Species", by.y = "species_original", all.x = TRUE)
+#data_fr_sp$Species <- NULL
+#data_fr_sp <- data.frame(Species = data_fr_sp$species_update, data_fr_sp[, !names(data_fr_sp) %in% "species_update"])
+#write.csv(data_fr_sp, "data_fr_sp.csv", row.names = FALSE)
+#Création d'un df en aggrégeant les données par la moyenne
+#data_fr_sp_clean <- read.csv("data_fr_sp.csv",header = TRUE, sep = ",", stringsAsFactors = FALSE)
+#write.csv(data_fr_sp_clean, "data_fr_sp_clean.csv", row.names = FALSE)
+
+```
+
+<br>
+
+Nous avons préparer un jeu de données écologiques pour l'analyse, en se concentrant sur la clarté des variables, l'intégrité des données et la précision des classifications d'espèces. Les données sont ensuite agrégées par espèce, calculant des moyennes pour chaque variable d'intérêt par espèce.
+
+
+
+<br>
+
+```{r}
+
+data_fr_sp_final <- read.csv("data_fr_sp_clean.csv",header = TRUE, sep = ",", stringsAsFactors = FALSE)
+mean_data_fr_sp <- as.data.frame(aggregate(data_fr_sp_final,by=list(as.factor(data_fr_sp_final$Species)),mean))
+mean_data_fr_sp$Species=NULL
+row.names(mean_data_fr_sp)= mean_data_fr_sp$Group.1
+mean_data_fr_sp$Group.1=NULL
+mean_data_fr_sp$BS = -mean_data_fr_sp$BS
+data_agg_mean <- select(mean_data_fr_sp, IC_class, BudP, BudA, BGR, BS, H5class, LCE)
+#write.csv(mean_data_fr_sp,NULL#write.csv(mean_data_fr_sp, "mean_data_fr_sp.csv", row.names = FALSE)
+#mean_data_fr_sp <- read.csv("mean_data_fr_sp.csv",header = TRUE, sep = ",", stringsAsFactors = FALSE)
+#Ouverture des fichiers SCORES SA et FR
+
+#Standardiser 
+stand_data_fr_sp = decostand(mean_data_fr_sp,"stand",2)
+stand_data_fr_sp_sans_score <- stand_data_fr_sp
+stand_data_fr_sp_sans_score$score_fire=NULL
+stand_data_fr_sp_sans_score$score_herb=NULL
+stand_data_fr_sp_sans_score$score_cover=NULL
+stand_data_fr_sp_score <- stand_data_fr_sp[, c("score_fire", "score_herb", "score_cover")]
+stand_data_fr_sp_score <- stand_data_fr_sp_score %>%
+  rename(Feu = score_fire,
+         Herbivorie = score_herb,
+         Ombre = score_cover)
+#write.csv(stand_data_fr_sp_sans_score, "stand_data_fr_sp_sans_score.csv")
+#write.csv(stand_data_fr_sp, "stand_data_fr_sp.csv")
+
+data_mean_stand <- decostand(data_agg_mean, "stand", 2)
+#Rang
+range_data_fr_sp = decostand(mean_data_fr_sp,"range",2)
+range_data_fr_sp_sans_score <- stand_data_fr_sp
+range_data_fr_sp_sans_score$score_fire=NULL
+range_data_fr_sp_sans_score$score_herb=NULL
+range_data_fr_sp_sans_score$score_cover=NULL
+range_data_fr_sp_score <- range_data_fr_sp[, c("score_fire", "score_herb", "score_cover")]
+range_data_fr_sp_score <- range_data_fr_sp_score %>%
+  rename(Feu = score_fire,
+         Herbivorie = score_herb,
+         Ombre = score_cover)
+#write.csv(range_data_fr_sp_sans_score, "range_data_fr_sp_sans_score.csv")
+#write.csv(range_data_fr_sp, "range_data_fr_sp.csv")
+
+setwd("C:/R/STAGE/")
+#data_score_fr_sp <- stand_data_fr_sp_sans_score
+#data_score_fr_sp <- select(data_score_fr_sp, IC_class, BudP, BudA, BGR, BS, H5class, LCE)
+
+```
+<br>
+
+# Calcul des scores environnementaux
+
+<br>
+
+```{r}
+#Calculer les scores
+data_score <- read.csv("scoreSA.csv",header = TRUE, sep = ",", stringsAsFactors = FALSE) 
+rownames(data_score) <- data_score[,1]
+data_score <- data_score[,-1]
+#Création de la matrice data_score_matrix pour calculer les scores
+data_score_matrix <- matrix(NA,dim(data_mean_stand)[1],3)
+rownames(data_score_matrix)=rownames (data_mean_stand)
+colnames(data_score_matrix)=c('FEU','HERB','COUV')
+for (i in 1:dim(data_mean_stand)[1])  {
+  data_score_matrix[i,1]= sum(data_mean_stand[i,]*data_score[1,])
+  data_score_matrix[i,2]= sum(data_mean_stand[i,]*data_score[2,])
+  data_score_matrix[i,3]= sum(data_mean_stand[i,]*data_score[3,])
+}
+data_score_df <- as.data.frame(data_score_matrix)
+data_score_df_range <- decostand(data_score_df, "range", 2)
+#write.csv(data_score_df, "data_score_df.csv")
+```
+<br>
+
+Les différentes valeurs obtenues pour chaque trait nous permettent de calculer des scores de feu, d’herbivorie et de tolérance à l’ombre, en utilisant des indices pour le feu, l’herbivorie et la tolérance à l’ombre calculés par Charles-Dominique (in prep), pour chaque trait (data_score). Les scores utilisés ont été obtenu en effectuant une analyse RLQ dans le parc de Hluhluwe-iMfolozi combinant les informations de communautés ligneuses pour les 63 espèces les plus abondantes, 253 plots de 200 m², une matrice environnementale incluant des données de couverture arborée (ombre), de fréquences des grands herbivores (comptages de crottes) et de fréquences des feux sur 20 ans, et une matrice de traits incluant les 12 traits considérés dans cette étude.
+
+$$
+\text{Score} = \sum_{i=1}^{n} (\text{indice} \times \text{trait}_i)
+$$
+
+<br>
+
+# Analyse statistique
+
+<br>
+
+## Analyses en composantes principales et biplot
+
+<br>
+
+```{r, fig.align='center'}
+res.pca <- PCA(stand_data_fr_sp_sans_score, graph = T)
+set.seed(123) # Pour la reproductibilité
+wss <- numeric(15)
+for (k in 2:15) {
+  kmeans_result <- kmeans(res.pca$ind$coord[, 1:2], centers = k) # Utiliser seulement les deux premières composantes principales
+  wss[k] <- kmeans_result$tot.withinss
+}
+plot(2:15, wss[2:15], type = "b", xlab = "Nombre de Clusters", ylab = "Somme des carrés intra-clusters", main = "Méthode du Coude")
+res.km <- kmeans(res.pca$ind$coord[, 1:2], centers = 3) 
+
+fviz_pca_ind(res.pca,
+             geom.ind = "point", # Utiliser des points pour représenter les individus
+             col.ind = as.factor(res.km$cluster), # Colorer les points selon l'information de cluster
+             palette = c("black", "darkorange", "darkgreen"), # Définir une palette de couleurs
+             addEllipses = T, # Ajouter des ellipses autour des clusters si désiré
+             label = "row", # Ajouter des étiquettes pour les individus
+             title = " ")
+
+
+# Visualiser les variables
+fviz_pca_var(res.pca,
+             col.var = "cos2", # Colorer par le cos2 des variables
+             gradient.cols = c("darkgreen", "darkorange"), # Utiliser une palette allant du blanc au bleu
+             title = " ")
+```
+<br>
+
+Nous avons effectué une Analyse en Composantes Principales (ACP) sur les données standardisées. Cette technique de réduction de dimensionnalité est utilisée pour identifier les patterns dans les données en soulignant leur variance et en transformant les variables potentiellement corrélées en un ensemble de valeurs de variables linéairement non corrélées.
+
+Pour déterminer le nombre optimal de clusters, nous avons initialisé l'algorithme de classification K-means avec un ensemble de graines pour garantir la reproductibilité. Nous avons calculé la somme des carrés intra-clusters (WSS) pour différents nombres de clusters (de 2 à 15) en utilisant uniquement les deux premières composantes principales obtenues de l'ACP. La méthode du coude a été appliquée pour visualiser le point où l'ajout de clusters supplémentaires n'apporte pas d'information significative, et donc pour déterminer le nombre optimal de clusters. Cette méthode implique de tracer la somme des carrés intra-cluster par rapport au nombre de clusters et d'identifier le 'coude' dans le graphique où le taux de diminution change brusquement.
+
+$$
+WSS = \sum_{k=2}^{15} \sum_{i=1}^{n} (x_i - \mu_k)^2
+$$
+
+Une fois le nombre optimal de clusters identifié, nous avons exécuté l'algorithme de classification K-means avec ce nombre de clusters pour regrouper les données en clusters distincts selon leur similarité.
+Nous avons ensuite visualisé les résultats de l'ACP en affichant les individus avec des points colorés selon leur appartenance aux clusters. Des ellipses de concentration ont été ajoutées pour chaque cluster pour mieux visualiser leur dispersion. 
+Les variables ont également été visualisées en utilisant leur contribution au carré du cosinus (cos2), ce qui indique la qualité de la représentation des variables sur la carte. Les variables ont été colorées en fonction de leur cos2, permettant une interprétation visuelle des contributions relatives des variables aux composantes principales.
+
+$$
+\text{cos2}(variable) = \frac{\text{CP}_1(variable)^2 + \text{CP}_2(variable)^2}{\sum_{j=1}^{m} \text{CP}_j(variable)^2}
+$$
+où \( \text{CP}_j(variable) \) est la contribution de la variable à la composante principale *j*.
+
+<br>
+
+## Corrélation
+
+<br>
+
+```{r, fig.align='center'}
+
+cor_feu_herbivorie <- cor(data_score_df$FEU, data_score_df$HERB, method = "pearson")
+cor_feu_ombre <- cor(data_score_df$FEU, data_score_df$COUV, method = "pearson")
+cor_herbivorie_ombre <- cor(data_score_df$HERB, data_score_df$COUV, method = "pearson")
+
+cor_tableau <- data.frame(
+  'Correlation Entre' = c('Feu et Herbivorie', 'Feu et Ombre', 'Herbivorie et Ombre'),
+  'Coefficient de Correlation' = c(cor_feu_herbivorie, cor_feu_ombre, cor_herbivorie_ombre)
+)
+print(cor_tableau)
+data_score_df$Species=NULL
+data_score_df <- data_score_df %>%
+  rename(Feu = FEU,
+         Ombre = COUV,
+         Herbivorie = HERB)
+pheatmap(data_score_df,
+         color = colorRampPalette(c("darkblue", "white", "darkred"))(100), # Dégradé de couleurs
+         scale = "none", # Les données sont déjà standardisées
+         clustering_distance_rows = "euclidean", # Distance euclidienne pour le clustering des lignes
+         clustering_distance_cols = "euclidean", # Distance euclidienne pour le clustering des colonnes
+         clustering_method = "complete", # Méthode de clustering
+         show_rownames = TRUE, # Afficher les noms des lignes
+         show_colnames = TRUE, # Afficher les noms des colonnes
+         fontsize_row = 10, # Taille de police pour les noms des lignes
+         fontsize_col = 10, # Taille de police pour les noms des colonnes
+         main = "") # Titre de la heatmap
+
+
+```
+<br>
+
+Nous avons évalué les relations linéaires entre les paires de variables suivantes : Feu et Herbivorie, Feu et Ombre, ainsi que Herbivorie et Ombre. 
+
+
+
+Ces analyses ont été réalisées en utilisant la méthode de Pearson pour calculer les coefficients de corrélation. Cette méthode est appropriée pour mesurer la force et la direction des associations linéaires entre variables continues. Un tableau récapitulatif a été généré pour présenter de manière claire les coefficients de corrélation entre les paires de variables étudiées. Ce tableau inclut les descripteurs des relations examinées ainsi que les valeurs de corrélation correspondantes. La formule de Pearson est calculée comme suit :
+
+$$ r = \frac{\sum (X_i - \overline{X})(Y_i - \overline{Y})}{\sqrt{\sum (X_i - \overline{X})^2 \sum (Y_i - \overline{Y})^2}} $$
+
+où \( X_i \) et \( Y_i \) sont les valeurs des variables X et Y, et \( \overline{X} \) et \( \overline{Y} \) sont les moyennes des valeurs de X et Y respectivement.
+
+Nous avons utilisé une heatmap pour visualiser la matrice des données, appliquant un dégradé de couleurs pour refléter l'intensité des valeurs observées. La heatmap a été structurée pour refléter la distance euclidienne entre les observations et entre les variables, utilisant une méthode de clustering complète. Les noms des variables et des observations ont été inclus pour faciliter l'interprétation, avec une mise en échelle appropriée de la police pour assurer une lisibilité optimale.
+
+<br>
+
+## Triangle plot : une analyse ternaire
+
+<br>
+
+```{r, fig.align='center'}
+data_triangle <- data_score_df_range %>%
+  rename(Feu = FEU,
+         Herbivorie = HERB,
+         Ombre = COUV)
+set.seed(123) # Pour la reproductibilité
+clusters <- kmeans(data_triangle[, c("Feu", "Ombre", "Herbivorie")], centers = 3)
+data_triangle$cluster <- clusters$cluster
+data_triangle$cluster <- factor(data_triangle$cluster,
+                                         levels = c(1, 2, 3),
+                                         labels = c("Ombre", "Herbivorie pyrique", "Feu et Herbivorie"))
+ggtern(data_triangle, ggtern::aes(x = Feu, y = Ombre, z = Herbivorie, color = cluster)) +
+  geom_point() +
+  scale_color_manual(name = " ",
+  values = c("Feu et Herbivorie" = "darkgreen", "Ombre" = "black", "Herbivorie pyrique" = "darkorange")) +
+  theme_arrowsmall() +
+  ggtitle(" ")
+```
+<br>
+
+Nous avons effectué une classification par la méthode K-means pour regrouper les observations en trois clusters distincts, basée sur leur profil en termes de Feu, Herbivorie et Ombre. La graine aléatoire a été fixée pour assurer la reproductibilité des résultats. Les clusters résultants ont été annotés avec des labels significatifs pour refléter leurs caractéristiques écologiques dominantes. Avec les clusters définis, nous avons utilisé un graphique ternaire pour visualiser la répartition des observations selon les trois variables écologiques.
+
+<br>
+
+## Régresion linéaire
+
+<br>
+
+```{r, fig.align='center'}
+lm_data <- lm(score_fire ~ score_herb + score_cover, data = range_data_fr_sp)
+summary(lm_data)
+#lm(formula = score_fire ~ score_herb, data= range_data_fr_sp)
+
+
+# Score de feu en fonction du score d'herbivorie
+data_score_df_range$Species <- rownames(data_score_df_range)
+
+model_feu_herb <- lm(FEU ~ HERB, data = data_score_df_range)
+summary_model_feu_herb <- summary(model_feu_herb)
+p_value_feu_herb <- summary_model_feu_herb$coefficients[2, 4]
+
+ggplot(data_score_df_range, ggplot2::aes(x = FEU, y = HERB)) +
+  geom_point() +
+  geom_text_repel(ggplot2::aes(label = Species), size = 3) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkorange") +
+  labs(x = "Score d'Herbivorie", y = "Score de Feu", title = "Relation entre la tolérance au Feu et la tolérance à l'Herbivorie") +
+  theme_grey() +
+  ggplot2::annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1, label = paste("P-value:", format(p_value_feu_herb, digits = 2)), size = 4)
+
+
+model_herb_cover <- lm(HERB ~ COUV, data = data_score_df_range)
+summary_model_herb_cover <- summary(model_herb_cover)
+p_value_herb_cover <- summary_model_herb_cover$coefficients[2, 4]
+
+ggplot(data_score_df_range, ggplot2::aes(x = HERB, y = COUV)) +
+  geom_point() +
+  geom_text_repel(ggplot2::aes(label = Species), size = 3) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
+  labs(x = "Score d'Herbivorie", y = "Score d'Ombre", title = "Relation entre la tolérance à l'Ombre et à l'Herbivorie") +
+  theme_grey() +
+  ggplot2::annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1, label = paste("P-value:", format(p_value_herb_cover, digits = 2)), size = 4)
+
+
+model_fire_cover <- lm(FEU ~ COUV, data = data_score_df_range)
+summary_model_fire_cover <- summary(model_fire_cover)
+p_value_fire_cover <- summary_model_fire_cover$coefficients[2, 4]
+
+ggplot(data_score_df_range, ggplot2::aes(x = FEU, y = COUV)) +
+  geom_point() +
+  geom_text_repel(ggplot2::aes(label = Species), size = 3) +
+  geom_smooth(method = "lm", se = TRUE, color = "brown4") +
+  labs(x = "Score de Feu", y = "Score d'Ombre", title = "Relation entre la tolérance à l'Ombre et la tolérance au Feu") +
+  theme_grey() +
+  ggplot2::annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1, label = paste("P-value:", format(p_value_fire_cover, digits = 2)), size = 4)
+
+```
+<br>
+
+Des modèles de régression linéaire ont été construits pour explorer les relations entre diverses mesures écologiques telles que la tolérance au feu, l'herbivorie et la couverture végétale. Un modèle linéaire a été ajusté pour évaluer comment la tolérance au feu peut être prédite à partir de la tolérance à l'herbivorie et à la couverture végétale. Les scores associés à ces mesures écologiques ont été utilisés comme variables explicatives.
+Des analyses de régression bivariée ont également été menées pour examiner les relations entre chaque paire de variables écologiques. Plus spécifiquement :
+
+- Un modèle a été développé pour comprendre la relation entre la tolérance au feu et l'herbivorie.
+- Un autre modèle a exploré la relation entre la tolérance à l'herbivorie et la couverture végétale.
+- Un troisième modèle a examiné comment la tolérance au feu est associée à la couverture végétale.
+Les modèles peuvent être exprimés de cette façon :
+$$
+Y = \beta_0 + \beta_1X_1 + \beta_2X_2 + \epsilon
+$$
+où \( Y \) représente la variable dépendante, \( \beta_0 \) est l'ordonnée à l'origine, \( \beta_1 \) et \( \beta_2 \) sont les coefficients pour les variables indépendantes \( X_1 \) et \( X_2 \), et \( \epsilon \) représente le terme d'erreur.
+
+Pour chaque paire de variables étudiée, le modèle linéaire simple est formulé comme :
+
+$$
+Y = \beta_0 + \beta_1X + \epsilon
+$$
+
+Ceci est utilisé pour évaluer la relation directe entre une variable dépendante \( Y \) et une variable indépendante \( X \) avec \( \beta_0 \) comme ordonnée à l'origine, \( \beta_1 \) comme coefficient de la variable indépendante, et \( \epsilon \) comme le terme d'erreur.
+
+Chacun de ces modèles a été évalué en termes de significativité statistique, en mettant l'accent sur les valeurs de P pour chaque variable prédictive.
+
+Pour chaque paire de variables, des graphiques de dispersion ont été créés pour visualiser la relation entre elles. Ces graphiques incluent :
+
+- Des points représentant les observations individuelles.
+- Des lignes de régression pour montrer la tendance linéaire entre les variables, avec des bandes de confiance pour indiquer l'incertitude autour des estimations de la ligne de régression.
+- Des étiquettes pour chaque point d'observation pour identifier les espèces correspondantes.
+
+Chaque graphique a été annoté avec la valeur de P correspondante pour la relation en question, fournissant un indicateur rapide de la significativité statistique de la relation observée.
+
+<br>
+
+## ANOVA à deux facteurs
+
+<br>
+
+```{r, fig.align='center'}
+
+AOV_data <-aov(Feu~Herbivorie + Ombre, data = data_score_df)
+summary(AOV_data)
+AOV_data_feu <-aov(Herbivorie~Feu + Ombre, data = data_score_df)
+summary(AOV_data_feu)
+AOV_data_herb <-aov(Feu~Ombre, data = data_score_df)
+
+```
+<br>
+
+Des analyses de variance à un facteur ont été menées pour examiner les effets des variables écologiques sur la tolérance au feu. Ces analyses ont pour but de décomposer la variance observée dans les données de tolérance au feu en composantes attribuables à différentes sources écologiques.
+Un modèle ANOVA a été ajusté pour quantifier l'impact de l'herbivorie et de la couverture végétale sur la tolérance au feu. Le modèle est structuré comme suit :
+
+$$
+\text{Feu} = \beta_0 + \beta_1 \text{Herbivorie} + \beta_2 \text{Ombre} + \epsilon
+$$
+
+où *Feu* est la variable dépendante mesurant la tolérance au feu, *Herbivorie* et *Ombre* sont les variables indépendantes, \( \beta_0 \) est l'intercept, \( \beta_1 \) et \( \beta_2 \) sont les coefficients des variables indépendantes, et \( \epsilon \) est l'erreur résiduelle.
+Dans un modèle ANOVA séparé, nous avons évalué comment la tolérance au feu et la couverture végétale influencent l'herbivorie. La formulation du modèle est :
+
+$$
+\text{Herbivorie} = \beta_0 + \beta_1 \text{Feu} + \beta_2 \text{Ombre} + \epsilon
+$$
+Enfin, un troisième modèle ANOVA a exploré l'effet unique de la tolérance à l'ombre sur la tolérance au feu, avec le modèle suivant :
+
+$$
+\text{Feu} = \beta_0 + \beta_1 \text{Ombre} + \epsilon
+$$
+
+<br>
+
+# Spatialisation des traits des espèces ligneuses méditerranéennes
+
+<br>
+
+## Préparation des données
+
+<br>
+
+```{r}
+#Télécharger les données d'occurence
+spplist = gsub("_"," ", rownames(mean_data_fr_sp))
+taxa = spplist
+options(timeout= 400000)
+#for(j in 1:length(taxa)){
+#  my.gbif.data<-occ_search(scientificName = taxa[j], hasCoordinate = T, hasGeospatialIssue = F, limit = 10000, fields = c("name","countryCode","decimalLatitude","decimalLongitude"))
+#write.table(my.gbif.data$data, paste(taxa[j],".txt"))
+#}
+
+#Crée une liste appelée "tempq" qui contient les noms de fichier de tous les fichiers dans le répertoire de travail actuel ayant l'extension ".txt"
+setwd("C:/R/STAGE/Species/")
+tempq=list.files(pattern="*.txt") #make sure you don't have other txt file than occ data in the working dir before running this command
+primer=as.data.frame(matrix(NA, 1,5)) # primer
+colnames(primer)=c("rep","latitude", "longitude","country","sp") 
+for(p in 1:length(tempq)){ 
+  temp2=read.table(tempq[p], header = TRUE, row.names=NULL)
+  temp2$sp= tempq[p]
+  if(colnames(temp2)[2]=="x")(matrix(c(0,tempq[p],NA,NA,NA),1,5))else(temp2)
+  colnames(temp2)=c("rep","latitude", "longitude","country","sp")
+  primer <- rbind(primer, temp2[duplicated(temp2)==FALSE,])
+} 
+
+primer=primer[-1,] #retire le primer
+primer$sp=str_sub(primer$sp, end=-6) #les 5 derniers caractères de chaque élément de la colonne "sp" sont supprimés
+#write.csv(primer,'list_species.csv')
+setwd("C:/R/STAGE/Species")
+list_species <- read.csv('list_species.csv')
+```
+<br>
+
+Les données d'occurrence pour une liste de taxons ont été téléchargées à partir d'une base de données globale sur la biodiversité. Ces données incluent la localisation géographique (latitude et longitude) et le code pays pour chaque occurrence enregistrée. Pour garantir la qualité des données, seules les occurrences avec des informations géographiques vérifiées et sans problèmes géospatiaux ont été sélectionnées. Les données téléchargées pour chaque taxon ont été enregistrées dans des fichiers individuels `.txt`. Un processus automatisé a été mis en place pour parcourir tous les fichiers `.txt` dans le répertoire spécifié, contenant les données d'occurrence pour chaque espèce. Une base de données unifiée a été créée en compilant les informations issues de tous les fichiers d'occurrence. Cette base de données comprend des informations sur la localisation géographique (latitude et longitude), le code pays, et l'identifiant de l'espèce pour chaque occurrence. Les doublons ont été éliminés pour assurer l'unicité de chaque occurrence dans la base de données finale. Les noms d'espèces ont été extraits des noms de fichiers et nettoyés pour enlever les extensions de fichier, fournissant un identifiant clair pour chaque occurrence d'espèce dans la base de données. La base de données finale, contenant les occurrences uniques par espèce avec leurs localisations géographiques, a été enregistrée dans un fichier `.csv` pour une utilisation ultérieure dans les analyses de biodiversité.
+
+<br>
+
+## Calcul et préparation des données
+
+<br>
+
+```{r, fig.align='center'}
+#Création d'un fond de carte
+worldmap <- ne_countries(scale = 'medium', type = 'map_units', returnclass = 'sf')
+
+#CARTOGRAPHIE
+setwd("C:/R/STAGE/Species")
+
+for (i in 1:length(tempq)) {
+  spname = str_sub(tempq[i], end = -6)  
+  sp = as.data.frame(read.table(tempq[i]))
+  ggplot() +   # Plot the map    
+    geom_sf(data = worldmap, colour = "blue", fill = "navyblue") +
+    coord_sf(xlim = c(-20, 45), ylim = c(30, 55), expand = FALSE)   +
+    geom_point(ggplot2::aes(x = sp$decimalLongitude,  # Specify the x axis as longitude
+                  y = sp$decimalLatitude),  # Colour the points based on species name
+               colour = 'lightgreen',
+               shape = 16,
+               alpha = 0.1,  # Set point opacity to 40%
+               size = 0.5) +  # Set point size to 1
+    ggtitle(spname) +      
+    ggplot2::theme_classic() +
+    theme(panel.background = element_rect(fill = "#2C3E4F", colour = "navyblue"))   # #2C3E4F 
+  ggplot2::ggsave(file.path("C:/R/STAGE/Maps", paste0(spname, ".png")),
+         width = 40, height = 22, units = "cm")
+}
+
+#Création d'un tableau dans lequel on rajoute les latitudes et longitudes pour les espèces ainsi que des colonnes pour les scores de traits
+maps <- list_species
+maps$rep = NULL
+maps$country=NULL
+maps$X=NULL
+maps$longitude=round(maps$longitude,2)
+maps$latitude=round(maps$latitude,2)
+maps=unique(maps)
+maps$FEU=0
+maps$HERB=0
+maps$COUV=0
+maps$Genus_species=gsub(" ","_", maps$sp)
+rownames(data_score_df_range)=levels(as.factor(maps$Genus_species))
+#Création d'un fichier maps avec les données de score standardisées
+for (i in 1:length(levels(as.factor(maps$Genus_species))))   {
+  maps$FEU[maps$Genus_species==levels(as.factor(maps$Genus_species))[i]]=data_score_df_range[levels(as.factor(maps$Genus_species))[i],1]
+  maps$HERB[maps$Genus_species==levels(as.factor(maps$Genus_species))[i]]=data_score_df_range[levels(as.factor(maps$Genus_species))[i],2]
+  maps$COUV[maps$Genus_species==levels(as.factor(maps$Genus_species))[i]]=data_score_df_range[levels(as.factor(maps$Genus_species))[i],3]
+} #utilisation des données standardisées
+#write.csv(maps, "maps.csv")
+setwd("C:/R/STAGE/Species")
+
+maps <- read.csv("maps.csv")
+#Création de maps_clean
+maps_clean = maps
+maps_clean$sp=NULL
+maps_clean$Genus_species=NULL
+#write.csv(maps_clean, "maps_clean.csv")
+#Création d'un tableau avec les scores de feu, herb et couv sous forme 0 ou 1
+for (i in 1:dim(maps_clean)[1]){
+  maps_clean$feu01[i]= if(maps_clean$FEU[i]==max(maps_clean[i,3:5]))(1)else(0)    
+  maps_clean$herb01[i]= if(maps_clean$HERB[i]==max(maps_clean[i,3:5]))(1)else(0)  
+  maps_clean$couv01[i]= if(maps_clean$COUV[i]==max(maps_clean[i,3:5]))(1)else(0)  
+}
+#write.csv(maps_clean, "maps_clean.csv")
+maps_aggregate = aggregate(maps_clean, list(maps_clean$latitude,maps_clean$longitude), mean)
+#write.csv(maps_aggregate, "maps_aggregate.csv")
+setwd('C:/R/STAGE/Maps/')
+maps_aggregate <- read.csv('maps_aggregate.csv')
+maps_med <- maps_aggregate %>%
+  dplyr::filter(latitude >= 30, latitude <= 50) %>%
+  dplyr::filter(longitude >= -20, longitude <= 40)
+#write.csv(maps_med, "maps_med.csv")
+setwd("C:/R/STAGE/Maps/")
+#Création de cartes pour QGIS
+maps_med <- maps_med %>%
+  select(-Group.1, -Group.2)
+#write.csv(maps_med, "maps_med.csv")
+maps_med_feu <- maps_med %>%
+  dplyr::filter(feu01 == 1)
+#write.csv(maps_med_feu, "maps_med_feu.csv")
+maps_med_couv <- maps_med %>%
+  dplyr::filter(couv01 == 1)
+#write.csv(maps_med_couv, "maps_med_couv.csv")
+maps_med_herb <- maps_med %>%
+  dplyr::filter(herb01 == 1)
+#write.csv(maps_med_herb, "maps_med_herb.csv")
+
+maps_med_round <- maps_med
+maps_med_round$latitude = round(maps_med$latitude,1)
+maps_med_round$longitude = round(maps_med$longitude,1)
+maps_med_round_agg <- aggregate(maps_med_round, list(maps_med_round$latitude,maps_med_round$longitude), sum)
+maps_med_round_agg <- maps_med_round_agg %>%
+  rename(lat = Group.1,
+         long = Group.2) %>%
+  select(-latitude, -longitude)
+
+#write.csv(maps_med_round_agg, "maps_med_aggregate_by_sum.csv")
+setwd("C:/Qgis/")
+maps_med_round_agg_feu <- maps_med_round_agg %>%
+  dplyr::filter(feu01 > herb01 & feu01 > couv01) %>%
+  select(-FEU, -HERB, -COUV, -herb01, -couv01)
+#write.csv(maps_med_round_agg_feu,"maps_aggregate_feu.csv")
+maps_med_round_agg_herb <- maps_med_round_agg %>%
+  dplyr::filter(herb01 > feu01 & herb01 > couv01) %>%
+  select(-FEU, -HERB, -COUV, -feu01, -couv01)
+#write.csv(maps_med_round_agg_herb,"maps_aggregate_herb.csv")
+maps_med_round_agg_couv <- maps_med_round_agg %>%
+  dplyr::filter(couv01 > feu01 & couv01 > herb01) %>%
+  select(-FEU, -HERB, -COUV, -feu01, -herb01)
+#write.csv(maps_med_round_agg_couv,"maps_aggregate_couv.csv")
+
+```
+<br>
+
+Des données d'occurrence pour une série d'espèces ont été téléchargées à partir d'une base de données globale sur la biodiversité. Ces données comprennent des informations géographiques précises (latitude et longitude) ainsi que le code du pays pour chaque enregistrement d'occurrence. Un fond de carte mondial a été généré pour servir de base aux visualisations cartographiques ultérieures. Ce fond de carte inclut les contours des pays et des masses continentales, fournissant un contexte géographique pour l'analyse de la distribution des espèces.cLes données d'occurrence pour chaque espèce ont été traitées et visualisées sur le fond de carte précédemment généré. Pour chaque espèce, les points d'occurrence ont été superposés sur la carte, avec une attention particulière portée à la distinction visuelle des différentes espèces par la couleur et la forme des points. Les données ont été aggrégées et nettoyées pour éliminer les doublons et pour standardiser les formats de données. Les coordonnées géographiques ont été arrondies pour faciliter l'analyse et la visualisation. Les scores relatifs à différentes caractéristiques écologiques des espèces (par exemple, tolérance au feu, herbivorie, couverture) ont été ajoutés à la base de données. Pour chaque espèce, les traits ont été classés de manière binaire en fonction de leur prédominance relative, permettant une analyse simplifiée des traits dominants au sein de la distribution géographique des espèces. Les données ont été préparées spécifiquement pour une utilisation dans QGIS, un système d'information géographique (SIG) open source. Cela comprenait la sélection des occurrences selon des critères géographiques spécifiques et l'exportation des données pour chaque trait dominant en fichiers distincts. Cette méthodologie a permis une analyse détaillée de la distribution géographique des traits écologiques des espèces à travers la visualisation cartographique et la classification binaire des traits. Les données préparées pour QGIS offrent des possibilités supplémentaires pour des analyses géospatiales plus approfondies.
+
+<br>
+
+## Visualisaton spatiale
+
+<br>
+
+```{r, fig.align='center'}
+##CREATION DES CARTES DES SCORES DE TRAITS + CARTE DE LA DIVERSITE + CARTES CLIMATS
+#Création de la carte pour les scores de feu à l'échelle du Bassin méd
+ggplot() +   # Plot the map    
+  geom_sf(data = worldmap, colour = "blue", fill = "navyblue") +
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 50), expand = FALSE)   +
+  geom_point(ggplot2::aes(x = maps_aggregate$longitude,  # Specify the x axis as longitude
+                 y = maps_aggregate$latitude),  # Colour the points based on species name
+            colour=c('black','orange')[maps_aggregate$feu01+1] ,
+             shape=15,
+             alpha = 0.4,  # 0.2 --> bien
+             size = 0.01) +  # 0.01 --> bien
+  ggtitle("All spp") +      
+  ggplot2::theme_classic()  +
+  theme(panel.background=element_rect(fill = "#2C3E4F", colour = "navyblue"))  
+#ggplot2::ggsave("maps_feu_med.png",width = 40, height = 22, units = "cm")
+
+
+#Création de la carte pour les scores d'herbivorie à l'échelle du Bassin méditerranéen
+ggplot() +   # Plot the map    
+  geom_sf(data = worldmap, colour = "blue", fill = "navyblue") +
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 50), expand = FALSE)   +
+  geom_point(ggplot2::aes(x = maps_aggregate$longitude,  # Specify the x axis as longitude
+                          y = maps_aggregate$latitude),  # Colour the points based on species name
+             colour=c('black','chartreuse')[maps_aggregate$herb01+1],
+             shape=15,
+             alpha = 0.4,  # Set point opacity to 40%
+             size = 0.01) +  # Set point size to 1
+  ggtitle("All spp") +      
+  ggplot2::theme_classic()  +
+  theme(panel.background=element_rect(fill = "#2C3E4F", colour = "navyblue"))  
+#ggplot2::ggsave("carte_herb_med.png",width = 40, height = 22, units = "cm")
+
+#Création d'un plot pour la carte des scores de couverture à l'échelle du Bassin méd
+ggplot() +   # Plot the map    
+  geom_sf(data = worldmap, colour = "blue", fill = "navyblue") +
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 50), expand = FALSE)   +
+  geom_point(ggplot2::aes(x = maps_aggregate$longitude,  # Specify the x axis as longitude
+                 y = maps_aggregate$latitude),  # Colour the points based on species name
+             colour=c('black','brown')[maps_aggregate$couv01+1],
+             shape=15,
+             alpha = 0.4,  # Set point opacity to 40%
+             size = 0.01) +  # Set point size to 1
+  ggtitle("All spp") +      
+  ggplot2::theme_classic()  +
+  theme(panel.background=element_rect(fill = "#2C3E4F", colour = "navyblue"))  
+#ggplot2::ggsave("carte_couv_med.png",width = 40, height = 22, units = "cm")
+
+color.gradient <- function(x, colors=c("navyblue","cyan","lightblue","lightyellow","lightgreen", "chartreuse","green"), colsteps=100) {
+  return( colorRampPalette(colors) (colsteps) [ findInterval(x, seq(min(x),max(x), length.out=colsteps)) ] )
+}
+
+div=maps
+div$longitude=round(div$longitude,2)
+div$latitude=round(div$latitude,2)
+div=unique(maps)
+div$un=1
+Div_agg = aggregate(div$un, list(div$longitude,div$latitude), sum)
+setwd("C:/Qgis")
+#write.csv(Div_agg, "diversite.csv")
+
+color.gradient <- function(x, colors=c("navyblue","cyan","lightblue","lightyellow","lightgreen", "chartreuse","green"), colsteps=100) {
+  # Créer une palette de couleurs
+  palette <- colorRampPalette(colors)(colsteps)
+  # Assigner une couleur à chaque valeur de x basée sur son intervalle
+  return(palette[findInterval(x, seq(min(x), max(x), length.out=colsteps))])
+}
+Div_agg$colors <- color.gradient(Div_agg$x)
+ggplot() +
+  geom_sf(data = worldmap, colour = "blue", fill = "black") +
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 50), expand = FALSE) +
+  geom_point(data = Div_agg, ggplot2::aes(x = Group.1, y = Group.2, colour = colors), shape = 15, alpha = 0.4, size = 0.01) +
+  scale_colour_identity() + # Pour utiliser les couleurs directement telles quelles dans 'colour'
+  ggtitle("") +      
+  labs(x = NULL, y = NULL) +
+  ggplot2::theme_classic() +
+  theme(panel.background = element_rect(fill = "#2C3E4F", colour = "black"))
+#ggplot2::ggsave("carte_div.png",width = 40, height = 22, units = "cm", dpi=600)
+
+```
+<br>
+
+Pour visualiser la répartition géographique des scores de traits écologiques (feu, herbivorie, couverture) des espèces à travers le bassin méditerranéen, plusieurs cartes ont été générées en utilisant les données géographiques aggrégées.
+
+Chaque carte représente une visualisation spécifique :
+- **Scores de Feu** : Met en évidence la répartition du score de tolérance au feu des espèces.
+- **Scores d'Herbivorie** : Affiche la distribution du score d'herbivorie.
+- **Scores de Couverture** : Indique la répartition du score de couverture végétale.
+
+La représentation de ces scores sur la carte est réalisée grâce à une superposition de points sur un fond de carte mondial, avec une classification binaire des scores représentés par des couleurs spécifiques.
+En plus des cartes de traits, une carte de la diversité des espèces a été créée pour montrer la densité des occurrences d'espèces dans différentes régions. La diversité a été calculée comme le nombre total d'espèces uniques par zone géographique.
+
+Pour toutes les cartes, les données géographiques ont été préalablement traitées pour arrondir les coordonnées à deux décimales et pour éliminer les doublons. Ceci a permis une aggrégation efficace des données et une visualisation plus claire.
+
+Les scores de traits pour le feu, l'herbivorie et la couverture ont été classés en deux catégories (0 ou 1) en fonction de leur prédominance relative, permettant une visualisation simplifiée sur les cartes.
+
+<br>
+
+
